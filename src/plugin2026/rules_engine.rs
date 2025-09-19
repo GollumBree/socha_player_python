@@ -3,13 +3,13 @@ use std::vec;
 use pyo3::*;
 
 use crate::plugin2026::{
-    board::Board, errors::PiranhasError, field_type::FieldType, r#move::Move,
+    board::Board,
+    errors::PiranhasError,
+    field_type::FieldType,
+    r#move::Move,
     utils::{
-        constants::PluginConstants,
-        coordinate::Coordinate,
-        direction::Direction,
-        team::TeamEnum
-    }
+        constants::PluginConstants, coordinate::Coordinate, direction::Direction, team::TeamEnum,
+    },
 };
 
 #[pyclass]
@@ -17,7 +17,6 @@ pub struct RulesEngine;
 
 #[pymethods]
 impl RulesEngine {
-
     #[staticmethod]
     pub fn move_distance(board: &Board, move_: &Move) -> usize {
         board.get_fish_on_line(&move_.start, &move_.direction).len()
@@ -25,18 +24,24 @@ impl RulesEngine {
 
     #[staticmethod]
     pub fn target_position(board: &Board, move_: &Move) -> Coordinate {
-        move_.start.clone().add_vector(&move_.direction.to_vector().scale(Self::move_distance(board, move_) as isize))
+        move_.start.clone().add_vector(
+            &move_
+                .direction
+                .to_vector()
+                .scale(Self::move_distance(board, move_) as isize),
+        )
     }
 
     #[staticmethod]
     pub fn is_in_bounds(coordinate: &Coordinate) -> bool {
-        coordinate.x >= 0 && coordinate.x < PluginConstants::BOARD_WIDTH as isize
-        && coordinate.y >= 0 && coordinate.y < PluginConstants::BOARD_HEIGHT as isize
+        coordinate.x >= 0
+            && coordinate.x < PluginConstants::BOARD_WIDTH as isize
+            && coordinate.y >= 0
+            && coordinate.y < PluginConstants::BOARD_HEIGHT as isize
     }
 
     #[staticmethod]
     pub fn can_execute_move(board: &Board, move_: &Move) -> Result<(), PyErr> {
-
         let target_pos = Self::target_position(board, move_);
 
         Self::is_in_bounds(&move_.start)
@@ -47,9 +52,11 @@ impl RulesEngine {
             .then_some(())
             .ok_or_else(|| PiranhasError::new_err("Target position is out of bounds"))?;
 
-        let start_field = board.get_field(&move_.start)
+        let start_field = board
+            .get_field(&move_.start)
             .expect("Already validated in-bounds position");
-        let target_field = board.get_field(&target_pos)
+        let target_field = board
+            .get_field(&target_pos)
             .expect("Already validated in-bounds position");
 
         let this_team = start_field
@@ -60,12 +67,18 @@ impl RulesEngine {
         blocked_fields.push(FieldType::Squid);
 
         if blocked_fields.contains(&target_field) {
-            return Err(PiranhasError::new_err("Cannot swim onto field of own team or squid"));
+            return Err(PiranhasError::new_err(
+                "Cannot swim onto field of own team or squid",
+            ));
         }
 
         let distance = Self::move_distance(board, move_);
         let direction_fields = board.get_fields_in_direction(&move_.start, &move_.direction);
-        let path_fields: Vec<_> = direction_fields.iter().take(distance - 1).cloned().collect(); // not including start or target
+        let path_fields: Vec<_> = direction_fields
+            .iter()
+            .take(distance - 1)
+            .cloned()
+            .collect(); // not including start or target
 
         for d in path_fields {
             let mut blocked_fields = this_team.get_fish_types();
@@ -90,11 +103,10 @@ impl RulesEngine {
 
     #[staticmethod]
     pub fn swarm_from(board: &Board, position: &Coordinate) -> Vec<Coordinate> {
-
         if !RulesEngine::is_in_bounds(position) {
             return vec![];
         }
-        
+
         let Some(this_team) = board.get_field(position).unwrap().get_team() else {
             return vec![];
         };
@@ -103,7 +115,6 @@ impl RulesEngine {
         let mut visited: Vec<Coordinate> = Vec::new();
 
         while !todo.is_empty() {
-
             let neighbors = RulesEngine::valid_neighbors(&todo[0]);
             for n in neighbors {
                 if visited.contains(&n) || todo.contains(&n) {
@@ -126,7 +137,6 @@ impl RulesEngine {
 
     #[staticmethod]
     pub fn swarms_of_team(board: &Board, team: &TeamEnum) -> Vec<Vec<Coordinate>> {
-
         let mut team_fish: Vec<Coordinate> = Vec::new();
         for f in team.get_fish_types() {
             team_fish.extend(board.get_fields_by_type(f));
@@ -147,12 +157,25 @@ impl RulesEngine {
 
         swarms
     }
+
+    #[staticmethod]
+    pub fn biggest_swarm(board: &Board, team: &TeamEnum) -> usize {
+        let swarms: Vec<Vec<Coordinate>> = RulesEngine::swarms_of_team(board, team);
+        swarms
+            .iter()
+            .map(|s: &Vec<Coordinate>| {
+                s.iter()
+                    .map(|f: &Coordinate| board.get_field(f).unwrap().get_value())
+                    .sum()
+            })
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 // rust exclusive methods
 impl RulesEngine {
     pub fn valid_neighbors(position: &Coordinate) -> Vec<Coordinate> {
-
         let mut coordinates: Vec<Coordinate> = Vec::new();
 
         for d in Direction::all_directions() {
@@ -161,7 +184,7 @@ impl RulesEngine {
                 coordinates.push(neighbor);
             }
         }
-        
+
         coordinates
     }
 }
